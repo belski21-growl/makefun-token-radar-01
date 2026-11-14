@@ -1,15 +1,29 @@
 <!doctype html>
+<!-- Token Radar — the static shell the board lives in.
+     Nothing on this page is rendered here: app.js builds the header, the spotlight cards,
+     the filters, the table, the model panel and the detail drawer inside #app, reading
+     window.RADAR out of ../data.js. This document only has to hand it four things, in
+     order: a skip link, a mount point, the stylesheet, and the two scripts (data first,
+     then the code that renders it). The page fetches nothing — stylesheet, data and
+     script are all local files sitting next to it. -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Radar — pre-token protocols ranked by implied launch value</title>
-<link rel="stylesheet" href="app.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Token Radar — pre-token protocols ranked by implied launch value</title>
+  <meta name="description" content="Token Radar ranks pre-token protocols by implied launch value, priced from the snapshot's own TVL and live-token comparables.">
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<a class="skip" href="#board">Skip to the board</a>
-<div id="app" aria-busy="true"></div>
-<script src="../data.js"></script>
-<script src="app.js"></script>
+  <!-- Keyboard users jump straight to the board table, past the header. -->
+  <a class="skip" href="#board">Skip to the board</a>
+
+  <!-- Mount point for app.js. aria-busy stays true until the first render lands. -->
+  <div id="app" aria-busy="true"></div>
+  <noscript><p style="padding: 24px; text-align: center;">Token Radar needs JavaScript: the board is rendered from the snapshot data beside this page.</p></noscript>
+
+  <!-- Data before code: app.js expects window.RADAR to already exist when it runs. -->
+  <script src="../data.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
