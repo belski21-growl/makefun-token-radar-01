@@ -1,16 +1,20 @@
 // Token Radar — the entry point (Node 22, standard library only).
 //
-// The run, end to end: read the sealed snapshot (from /input/snapshot.json, or wherever
-// --input points), score every pre-token protocol with the radar-3 model in lib/model.ts,
-// and lay out /output — the ranked board.json, the dashboard's data.js, a copy of
-// dashboard/ and screenshots/, and finally the dossier.json the sealed scorer rebuilds
-// and compares byte for byte. Before the dossier is sealed, board.json and data.js are
-// read back off the disk and checked against the board still in memory, so a truncated
-// or altered write fails loudly here instead of quietly in the grader's sandbox.
+// The run, end to end: read the sealed snapshot (from /input/snapshot.json,
+// or wherever --input points), score every pre-token protocol with the
+// radar-3 model in lib/model.ts, and lay out /output — the ranked
+// board.json, the dashboard's data.js (round 2: each category's comparable
+// multiple now travels with its basis — how many live comparables set it,
+// whether it fell back to the global median, and how crowded its field is),
+// a copy of dashboard/ and screenshots/, and finally the dossier.json the
+// sealed scorer rebuilds and compares byte for byte. Before the dossier is
+// sealed, board.json and data.js are read back off the disk and checked
+// against the board still in memory, so a truncated or altered write fails
+// loudly here instead of quietly in the grader's sandbox.
 //
-// The grade runs this program twice and both runs must land the same bytes: the model is
-// a pure function of the snapshot (multiples come from the snapshot itself, ties break
-// by slug), so the output is deterministic.
+// The grade runs this program twice and both runs must land the same bytes:
+// the model is a pure function of the snapshot (multiples come from the
+// snapshot itself, ties break by slug), so the output is deterministic.
 //
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <snapshot.json>
@@ -33,7 +37,7 @@ const IMAGE_NAME = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$/;
  * Read a `--name value` or `--name=value` flag out of the arguments, falling back
  * when the flag is absent — or present with nothing after it.
  */
-function flagValue(name: string, fallback: string): string {
+function readFlag(name: string, fallback: string): string {
   const argv = process.argv;
   const bare = argv.indexOf(`--${name}`);
   if (bare >= 0 && bare + 1 < argv.length) return argv[bare + 1]!;
@@ -42,7 +46,7 @@ function flagValue(name: string, fallback: string): string {
 }
 
 // Where the snapshot comes from: a file, or a directory holding snapshot.json.
-const inputArg = flagValue('input', '/input');
+const inputArg = readFlag('input', '/input');
 const inputFile = inputArg.endsWith('.json') ? inputArg : join(inputArg, 'snapshot.json');
 if (!existsSync(inputFile)) {
   process.stderr.write(`token radar: no snapshot at ${inputFile}: pass --input <snapshot.json|directory> or mount the sealed /input\n`);
@@ -50,7 +54,7 @@ if (!existsSync(inputFile)) {
 }
 
 // Where the output goes: --output wins, then the environment, then /output.
-const out = flagValue('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
+const out = readFlag('output', process.env.MAKEFUN_OUTPUT_DIR ?? '/output');
 
 // Score the snapshot. A board the gate refuses never reaches the disk.
 const snapshot = parseSnapshot(readFileSync(inputFile, 'utf8'));
@@ -69,7 +73,7 @@ writeFileSync(join(out, 'data.js'), dataScript(radar));
  * Copy one directory's regular files into `to`, skipping dotfiles, and report the
  * names copied. A missing source directory copies nothing at all.
  */
-function copyDirFiles(from: string, to: string): string[] {
+function copyPlainFiles(from: string, to: string): string[] {
   if (!existsSync(from)) return [];
   mkdirSync(to, { recursive: true });
   const copied: string[] = [];
@@ -83,8 +87,8 @@ function copyDirFiles(from: string, to: string): string[] {
   return copied;
 }
 
-const dash = copyDirFiles(join(here, 'dashboard'), join(out, 'dashboard'));
-const shots = copyDirFiles(join(here, 'screenshots'), join(out, 'screenshots'));
+const dash = copyPlainFiles(join(here, 'dashboard'), join(out, 'dashboard'));
+const shots = copyPlainFiles(join(here, 'screenshots'), join(out, 'screenshots'));
 if (shots.length < 3) {
   process.stderr.write(`token radar: screenshots/ holds ${shots.length} image${shots.length === 1 ? '' : 's'}: hand in 3, the board, a detail view and a filtered view\n`);
   process.exit(1);
@@ -100,9 +104,12 @@ for (const name of shots) {
  * Read board.json and data.js back off the disk and check them against the board in
  * memory, before the dossier seals them: a short write, a wrong row count or a
  * changed top value must fail here, not in the grader's sandbox. A board that came
- * back empty has nothing to seal.
+ * back empty has nothing to seal. The round-2 comparable detail is checked too:
+ * every board row's category must carry a detail entry, and each detail's multiple
+ * must be the category multiple or the global one — so a data.js that lost the
+ * transparency fields fails here instead of rendering a bare multiple.
  */
-function verifyWrittenBoard(): void {
+function checkWrittenOutputs(): void {
   const written = JSON.parse(readFileSync(join(out, 'board.json'), 'utf8')) as { rows?: unknown[] };
   const rowsOnDisk = Array.isArray(written.rows) ? written.rows.length : -1;
   if (rowsOnDisk !== board.length) {
@@ -116,13 +123,36 @@ function verifyWrittenBoard(): void {
   }
   const dataText = readFileSync(join(out, 'data.js'), 'utf8');
   const dataJson = dataText.replace(/^window\.RADAR=/, '').replace(/;\n?$/, '');
-  const parsedData = JSON.parse(dataJson) as { rows?: unknown[] };
+  const parsedData = JSON.parse(dataJson) as {
+    rows?: unknown[];
+    comp_global?: unknown;
+    comp_by_category?: Record<string, unknown>;
+    comp_by_category_detail?: Record<string, { multiple?: unknown; comparables?: unknown; fallback_global?: unknown; crowd?: unknown }>;
+  };
   if (!Array.isArray(parsedData.rows) || parsedData.rows.length !== board.length) {
     process.stderr.write('token radar: data.js on disk does not carry the board\n');
     process.exit(1);
   }
+  const detail = parsedData.comp_by_category_detail;
+  if (typeof detail !== 'object' || detail === null || Object.keys(detail).length === 0) {
+    process.stderr.write('token radar: data.js on disk carries no comparable detail\n');
+    process.exit(1);
+  }
+  for (const row of board) {
+    const entry = detail[row.category ?? 'Other'];
+    if (entry === undefined) {
+      process.stderr.write(`token radar: data.js on disk has no comparable detail for ${row.category ?? 'Other'}\n`);
+      process.exit(1);
+    }
+    const priced = parsedData.comp_by_category?.[row.category ?? 'Other'];
+    const expected = priced !== undefined ? priced : parsedData.comp_global;
+    if (entry.multiple !== expected) {
+      process.stderr.write(`token radar: data.js on disk disagrees with the board on the comparable multiple for ${row.category ?? 'Other'}\n`);
+      process.exit(1);
+    }
+  }
 }
-verifyWrittenBoard();
+checkWrittenOutputs();
 
 // The dossier is written last: the scorer rebuilds it from this /output and compares bytes.
 writeFileSync(join(out, 'dossier.json'), buildDossier(out, { text_max_bytes: MAX_TEXT_BYTES, screenshots: SHOT_LIMITS, dashboard: { max_files: 400, max_bytes: 4_194_304 } }));
