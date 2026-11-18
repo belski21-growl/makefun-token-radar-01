@@ -14,47 +14,67 @@ protocols below that floor, screened the same way. The 24 protocols that already
 have a live token are never ranked — they are shown apart, at their market caps,
 and they are the comparables the model prices the board from.
 
-## The top of the board
+## The top of the board (radar-4)
 
 | Rank | Protocol | Implied value |
 | --- | --- | --- |
-| 1 | Steakhouse Financial | $404.0M |
-| 2 | Sentora Curator | $374.0M |
-| 3 | Gauntlet | $240.6M |
-| 4 | USDD | $141.4M |
-| 5 | Veda | $109.6M |
+| 1 | Sentora Curator | $30.2M |
+| 2 | Steakhouse Financial | $30.2M |
+| 3 | Gauntlet | $23.0M |
+| 4 | Veda | $22.9M |
+| 5 | Polymarket | $21.1M |
 
-## How a row is priced (model radar-3)
+## How a row is priced (model radar-4)
 
 A protocol is rankable when the snapshot records no token for it at all — no
 market cap, no CoinGecko id, no symbol — and it passes the watchlist screen:
 not a bridge, liquid-staking or restaking product, no whole word `wrapped`,
 `staked` or `staking` in the name, no version marker, no exchange-name prefix.
 
-Implied value is one function of the snapshot's own numbers, in four factors:
+Implied value is derived in three stages:
 
-```
-implied = max(1, round(tvl_usd × comp × growth × maturity × breadth))
-```
+1. **Fitted curve** — `value_if_launches = 10^(a + b·log₁₀(TVL)) × family_offset × ∏kept_terms`
+   - `a = 3.2610`, `b = 0.4903` (Huber-robust fit on 119 live-token comparables, R² = 0.1428)
+   - `family_offset` — shrunken category offset (dropped by ablation; = 1.0 here)
+   - `kept_terms` — extra terms (growth, seasoning, breadth) that pass dual LOO+WF gate (none kept)
 
-- **comp** — the category's comparable multiple: the median market-cap-per-TVL
-  of the category's live-token protocols (at least 3 comparables, otherwise the
-  global median), steadied toward the global median with three phantom
-  comparables at the global rate, discounted 1% per rankable pre-token protocol
-  past the third in the same category (a crowded launch field splits the value),
-  then eased past the 0.80 cap on a curve that never passes 1.00 — so two rich
-  categories keep their order instead of tying at the cap. Floor 0.08.
-- **growth** — `1 + clamp(change_7d, −60, 120) / 100 × 0.5`. Fast-growing TVL
-  is worth more at the same size.
-- **maturity** — `0.6 + min(age_days, 1095) / 1095 × 0.4`, where age is the time
-  since DefiLlama first listed the protocol; unknown age counts as 365 days.
-  A protocol that has run a long time with no token carries more pent-up
-  launch value.
-- **breadth** — `1 + 0.02 × min(chains − 1, 5)`. More chains, more farmers.
+2. **Launch odds** — age-bucket odds from the snapshot (AUC 0.707, base rate 50.7%):
+   - `<180d`: 27.8% | `180–365d`: 39.9% | `365–730d`: 38.9% | `730–1095d`: 54.6% | `>1095d`: 78.3%
+
+3. **Implied value** — `implied = max(1, round(value_if_launches × odds))`
 
 No protocol name is ever special-cased: the same function scores every row, and
-the category multiples are computed from the snapshot at run time, so a future
+the curve parameters are fitted from the snapshot at run time, so a future
 snapshot re-prices the board on its own.
+
+### Farm economics & verdicts (at $1,000 deposit)
+
+- **Expected slice** = (1000 / TVL) × 10% × implied (already includes odds)
+- **Slice if launches** = slice / odds
+- **Gas** = setup ($8 if plan capital ≥ $150 else $4) + $2/week × weeks + $3 second-chain + $2 claim
+- **T-bill** = 4% × $1000 × hold_days / 365 (hold days by age: 30/45/60)
+- **Net if launches** = sliceLaunch − gas − T-bill
+- **Expected net** = slice − gas − T-bill
+- **Break-even odds %** = (gas + T-bill) / sliceLaunch × 100 (sentinel 100,000% if never pays)
+- **Hours** = 15 min setup + 10 min/week × weeks + 10 min second-chain + 10 min claim + 5 min log
+- **Net/hour** = expected net / hours
+
+**Verdict rules (locked):**
+- **ROBUST** = FARM and net at band_lo > $0
+- **FARM** = expected net > $0 and net/hour ≥ $1
+- **THIN** = expected net > $0 and net/hour < $1
+- **MARGINAL** = expected net ≤ $0 and break-even odds < 100%
+- **SKIP** = break-even odds ≥ 100%
+
+Current verdict counts: ROBUST 0, FARM 25, THIN 3, MARGINAL 101, SKIP 69 (sum 198).
+
+### Validation (radar-4)
+
+- LOO: curve miss 3.33× vs flat 4.88× | within 3×: 43.7% vs 34.5%
+- Walk-forward (cut 2024-02-28, n=44/43): curve 2.43× vs flat 5.03×
+- Band-hold: P25–P75 49.6% (nominal 50%), P10–P90 79.8% (nominal 80%)
+- Ablation: 7 steps — flat → OLS → Huber (kept) → family offsets (dropped) → +growth (dropped) → +seasoning (dropped) → +breadth (dropped)
+- Bootstrap rank ranges: 200 refits, fixed seed 0x52414441 ("RADA")
 
 ## Farm plans
 
@@ -71,12 +91,18 @@ never pay to claim an airdrop, never share a seed phrase.
 
 `dashboard/` is a static page with no network: `index.html` is the shell,
 `app.js` renders everything from `data.js` beside it, `app.css` is the dark
-theme. It shows the ranked board with search, category / chain / minimum-TVL
-filters and sorting, a spotlight of the top three, the live-token protocols set
-aside, the model panel with the formula and the category multiples, and a detail
-drawer per protocol with the model's own inputs and its farm plan. The page
-recomputes each row's implied value from the same four factors and checks it
-against `board.json` — 0 mismatches across all 198 rows.
+theme. It shows the ranked board with search, category / chain / verdict /
+minimum-TVL filters and sorting (implied, expected net, net/hour), a spotlight
+of the top three, the live-token protocols set aside, the method & validation
+panel with the fitted equation, LOO/WF/band-hold/ablation/odds tables, a
+KPI strip, a "Best Farms Next" strip (top 5 FARM/THIN by net/hour), the
+category multiples panel, and a detail drawer per protocol with the waterfall
+(curve → family_offset → kept_terms → value_if_launches → × odds → implied),
+nearest 3 comparables, uncertainty bands + bootstrap rank range, and the farm
+economics box (slice, gas, T-bill, net if launches, expected net, break-even
+odds %, hours, net/hour, verdict). The page recomputes each row's implied
+value from the radar-4 formula and checks it against `board.json` — 0 mismatches
+across all 198 rows.
 
 ## Running it
 
@@ -86,7 +112,7 @@ Node 22, standard library only, no dependencies and no network at run time:
 mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts --input <snapshot.json>
 ```
 
-`main.ts` reads the sealed snapshot, scores the board with the radar-3 model in
+`main.ts` reads the sealed snapshot, scores the board with the radar-4 model in
 `lib/model.ts`, writes `board.json` and `data.js`, copies `dashboard/` and
 `screenshots/` into the output, then reads `board.json` and `data.js` back off
 the disk and checks them against the board in memory — a short or changed write
@@ -97,7 +123,7 @@ into separate directories write byte-identical files.
 ## Files
 
 - `main.ts` — the entry program: snapshot in, board + dashboard + dossier out.
-- `lib/model.ts` — the radar-3 model, the board builder, the farm-plan generator.
+- `lib/model.ts` — the radar-4 model, the board builder, the farm-plan generator.
 - `dashboard/` — the static page (`index.html`, `app.css`, `app.js`).
 - `screenshots/` — the board, a detail view and a filtered view at 1440×900.
 - `vendor/makefun-board.ts` — the kit's dossier builder, copied byte-for-byte.

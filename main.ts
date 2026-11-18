@@ -22,7 +22,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { boardIssue, buildRadar, dataScript, parseSnapshot } from './lib/model.ts';
+import { boardIssue, buildRadar, dataScript, parseSnapshot, type BoardRow } from './lib/model.ts';
 import { buildDossier } from './vendor/makefun-board.ts';
 
 // The folder this file lives in — dashboard/ and screenshots/ sit beside it.
@@ -108,49 +108,190 @@ for (const name of shots) {
  * every board row's category must carry a detail entry, and each detail's multiple
  * must be the category multiple or the global one — so a data.js that lost the
  * transparency fields fails here instead of rendering a bare multiple.
+ *
+ * Round 3 adds: fit (n_comps=119), odds (5 buckets + base_rate + auc),
+ * validation (ablation + walkforward + band_hold), per-row bands/ranks/econ,
+ * verdict_counts (sums to 198), best_farms (≤5, net_per_hour>0).
  */
-function checkWrittenOutputs(): void {
-  const written = JSON.parse(readFileSync(join(out, 'board.json'), 'utf8')) as { rows?: unknown[] };
-  const rowsOnDisk = Array.isArray(written.rows) ? written.rows.length : -1;
-  if (rowsOnDisk !== board.length) {
-    process.stderr.write(`token radar: board.json on disk holds ${rowsOnDisk < 0 ? 'no' : rowsOnDisk} rows, the model wrote ${board.length}\n`);
+
+function parseDataJs(text: string): Record<string, unknown> {
+  const cleaned = text.replace(/^window\.RADAR=/, '').replace(/;\n?$/, '');
+  return JSON.parse(cleaned) as Record<string, unknown>;
+}
+
+function assertBoardMatchesDisk(writtenRows: unknown[], expectedCount: number, topImplied: number): void {
+  const rowsOnDisk = Array.isArray(writtenRows) ? writtenRows.length : -1;
+  if (rowsOnDisk !== expectedCount) {
+    process.stderr.write(`token radar: board.json on disk holds ${rowsOnDisk < 0 ? 'no' : rowsOnDisk} rows, the model wrote ${expectedCount}\n`);
     process.exit(1);
   }
-  const first = (written.rows as { implied_value_usd?: unknown }[])[0];
-  if (board.length === 0 || first?.implied_value_usd !== board[0]!.implied_value_usd) {
+  if (expectedCount === 0 || (writtenRows[0] as { implied_value_usd?: unknown })?.implied_value_usd !== topImplied) {
     process.stderr.write('token radar: board.json on disk disagrees with the board in memory on rank 1\n');
     process.exit(1);
   }
-  const dataText = readFileSync(join(out, 'data.js'), 'utf8');
-  const dataJson = dataText.replace(/^window\.RADAR=/, '').replace(/;\n?$/, '');
-  const parsedData = JSON.parse(dataJson) as {
-    rows?: unknown[];
-    comp_global?: unknown;
-    comp_by_category?: Record<string, unknown>;
-    comp_by_category_detail?: Record<string, { multiple?: unknown; comparables?: unknown; fallback_global?: unknown; crowd?: unknown }>;
-  };
-  if (!Array.isArray(parsedData.rows) || parsedData.rows.length !== board.length) {
+}
+
+function assertDataJsCarriesBoard(parsedData: Record<string, unknown>, expectedCount: number): void {
+  if (!Array.isArray(parsedData.rows) || parsedData.rows.length !== expectedCount) {
     process.stderr.write('token radar: data.js on disk does not carry the board\n');
     process.exit(1);
   }
-  const detail = parsedData.comp_by_category_detail;
+}
+
+function assertComparableDetailPresent(detail: Record<string, unknown>): void {
   if (typeof detail !== 'object' || detail === null || Object.keys(detail).length === 0) {
     process.stderr.write('token radar: data.js on disk carries no comparable detail\n');
     process.exit(1);
   }
+}
+
+function assertEveryCategoryHasDetail(board: BoardRow[], detail: Record<string, unknown>): void {
   for (const row of board) {
-    const entry = detail[row.category ?? 'Other'];
-    if (entry === undefined) {
-      process.stderr.write(`token radar: data.js on disk has no comparable detail for ${row.category ?? 'Other'}\n`);
-      process.exit(1);
-    }
-    const priced = parsedData.comp_by_category?.[row.category ?? 'Other'];
-    const expected = priced !== undefined ? priced : parsedData.comp_global;
-    if (entry.multiple !== expected) {
-      process.stderr.write(`token radar: data.js on disk disagrees with the board on the comparable multiple for ${row.category ?? 'Other'}\n`);
+    const cat = row.category ?? 'Other';
+    if (detail[cat] === undefined) {
+      process.stderr.write(`token radar: data.js on disk has no comparable detail for ${cat}\n`);
       process.exit(1);
     }
   }
+}
+
+function assertDetailMultipleMatches(board: BoardRow[], parsedData: Record<string, unknown>, detail: Record<string, unknown>): void {
+  for (const row of board) {
+    const cat = row.category ?? 'Other';
+    const entry = detail[cat] as { multiple?: unknown };
+    const priced = (parsedData.comp_by_category as Record<string, unknown> | undefined)?.[cat];
+    const expected = priced !== undefined ? priced : parsedData.comp_global;
+    if (entry.multiple !== expected) {
+      process.stderr.write(`token radar: data.js on disk disagrees with the board on the comparable multiple for ${cat}\n`);
+      process.exit(1);
+    }
+  }
+}
+
+function assertFitPresent(fit: unknown): void {
+  const f = fit as Record<string, unknown> | undefined;
+  if (!f || typeof f !== 'object') {
+    process.stderr.write('token radar: data.js on disk missing fit object\n');
+    process.exit(1);
+  }
+  if (f.n_comps !== 119) {
+    process.stderr.write(`token radar: data.js fit.n_comps is ${f.n_comps}, expected 119\n`);
+    process.exit(1);
+  }
+}
+
+function assertOddsPresent(odds: unknown): void {
+  const o = odds as { buckets?: unknown[]; base_rate?: unknown; auc?: unknown } | undefined;
+  if (!o || typeof o !== 'object') {
+    process.stderr.write('token radar: data.js on disk missing odds object\n');
+    process.exit(1);
+  }
+  if (!Array.isArray(o.buckets) || o.buckets.length !== 5) {
+    process.stderr.write(`token radar: data.js odds.buckets has ${Array.isArray(o.buckets) ? o.buckets.length : 'no'} entries, expected 5\n`);
+    process.exit(1);
+  }
+  if (typeof o.base_rate !== 'number' || typeof o.auc !== 'number') {
+    process.stderr.write('token radar: data.js odds missing base_rate or auc\n');
+    process.exit(1);
+  }
+}
+
+function assertValidationPresent(validation: unknown): void {
+  const v = validation as { ablation?: unknown; walkforward?: unknown; band_hold?: unknown } | undefined;
+  if (!v || typeof v !== 'object') {
+    process.stderr.write('token radar: data.js on disk missing validation object\n');
+    process.exit(1);
+  }
+  if (!Array.isArray(v.ablation) || v.ablation.length === 0) {
+    process.stderr.write('token radar: data.js validation.ablation missing or empty\n');
+    process.exit(1);
+  }
+  if (!v.walkforward || typeof v.walkforward !== 'object') {
+    process.stderr.write('token radar: data.js validation.walkforward missing\n');
+    process.exit(1);
+  }
+  if (!v.band_hold || typeof v.band_hold !== 'object') {
+    process.stderr.write('token radar: data.js validation.band_hold missing\n');
+    process.exit(1);
+  }
+}
+
+function assertRowsHaveBandsAndRanksAndEcon(rows: unknown[]): void {
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] as Record<string, unknown>;
+    const required = ['band_lo', 'band_hi', 'band_lo90', 'band_hi90', 'rank_lo', 'rank_hi', 'econ'];
+    for (const field of required) {
+      if (!(field in r) || r[field] === undefined || r[field] === null) {
+        process.stderr.write(`token radar: data.js row ${i} (${r.slug ?? 'unknown'}) missing ${field}\n`);
+        process.exit(1);
+      }
+    }
+    const econ = r.econ as Record<string, unknown>;
+    if (!econ || typeof econ !== 'object' || econ.verdict === undefined) {
+      process.stderr.write(`token radar: data.js row ${i} (${r.slug ?? 'unknown'}) econ missing verdict\n`);
+      process.exit(1);
+    }
+  }
+}
+
+function assertVerdictCounts(vc: unknown): void {
+  const counts = vc as Record<string, number> | undefined;
+  if (!counts || typeof counts !== 'object') {
+    process.stderr.write('token radar: data.js missing verdict_counts\n');
+    process.exit(1);
+  }
+  const keys = ['farm', 'thin', 'marginal', 'skip', 'robust'];
+  for (const k of keys) {
+    if (typeof counts[k] !== 'number') {
+      process.stderr.write(`token radar: data.js verdict_counts.${k} missing\n`);
+      process.exit(1);
+    }
+  }
+  const sum = keys.reduce((acc, k) => acc + (counts[k] ?? 0), 0);
+  if (sum !== 198) {
+    process.stderr.write(`token radar: data.js verdict_counts sums to ${sum}, expected 198\n`);
+    process.exit(1);
+  }
+}
+
+function assertBestFarms(bf: unknown): void {
+  const farms = bf as Array<{ net_per_hour: number }> | undefined;
+  if (!Array.isArray(farms)) {
+    process.stderr.write('token radar: data.js best_farms missing or not an array\n');
+    process.exit(1);
+  }
+  if (farms.length > 5) {
+    process.stderr.write(`token radar: data.js best_farms has ${farms.length} entries, expected at most 5\n`);
+    process.exit(1);
+  }
+  for (let i = 0; i < farms.length; i++) {
+    if (typeof farms[i]?.net_per_hour !== 'number' || farms[i].net_per_hour <= 0) {
+      process.stderr.write(`token radar: data.js best_farms[${i}] has net_per_hour ${farms[i]?.net_per_hour}, expected > 0\n`);
+      process.exit(1);
+    }
+  }
+}
+
+function checkWrittenOutputs(): void {
+  const written = JSON.parse(readFileSync(join(out, 'board.json'), 'utf8')) as { rows?: unknown[] };
+  assertBoardMatchesDisk(written.rows ?? [], board.length, board[0]?.implied_value_usd ?? 0);
+
+  const dataText = readFileSync(join(out, 'data.js'), 'utf8');
+  const parsedData = parseDataJs(dataText);
+
+  assertDataJsCarriesBoard(parsedData, board.length);
+
+  const detail = parsedData.comp_by_category_detail as Record<string, unknown> | undefined;
+  assertComparableDetailPresent(detail ?? {});
+  assertEveryCategoryHasDetail(board, detail ?? {});
+  assertDetailMultipleMatches(board, parsedData, detail ?? {});
+
+  assertFitPresent(parsedData.fit);
+  assertOddsPresent(parsedData.odds);
+  assertValidationPresent(parsedData.validation);
+  assertRowsHaveBandsAndRanksAndEcon(parsedData.rows as unknown[]);
+  assertVerdictCounts(parsedData.verdict_counts);
+  assertBestFarms(parsedData.best_farms);
 }
 checkWrittenOutputs();
 

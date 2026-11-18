@@ -1,10 +1,10 @@
 /* ------------------------------------------------------------------ */
-/* Token Radar — the board's dark theme, rewritten.                      */
+/* Token Radar — Dashboard for radar-4 (Round 3).                      */
 /*                                                                      */
 /* One palette and one spacing ladder carry the whole page: every       */
 /* colour, radius and step below comes from the :root tokens, so the    */
 /* look is a single set of numbers, not a value per rule. No web        */
-/* fonts, no remote assets, no network anywhere — the page is fully     */
+/* fonts, no remote assets, no network — the page is fully              */
 /* self-contained next to data.js.                                      */
 /* ------------------------------------------------------------------ */
 
@@ -21,6 +21,11 @@
   --accent-ink: #06281c;
   --gold: #f5b942;
   --negative: #f87171;
+  --verdict-robust: #34d399;
+  --verdict-farm: #60a5fa;
+  --verdict-thin: #f5b942;
+  --verdict-marginal: #f87171;
+  --verdict-skip: #93a69d;
   --radius-control: 8px;
   --radius-panel: 14px;
   --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -44,10 +49,11 @@ body {
   margin: 0;
   text-wrap: pretty;
 }
-h1, h2, h3 { margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+h1, h2, h3, h4 { margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
 h1 { font-size: 32px; font-weight: 650; line-height: 1.12; }
 h2 { font-size: 20px; font-weight: 650; line-height: 1.2; }
 h3 { font-size: 15px; font-weight: 600; line-height: 1.25; }
+h4 { font-size: 13px; font-weight: 600; line-height: 1.3; }
 p { margin: 0; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -67,7 +73,7 @@ a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* -- Page frame: one centred column, generous air at the edges. -- */
-.shell { max-width: 1320px; margin: 0 auto; padding: var(--step-5) var(--step-6) var(--step-7); }
+.shell { max-width: 1440px; margin: 0 auto; padding: var(--step-5) var(--step-6) var(--step-7); }
 
 /* -- Masthead: wordmark left, snapshot facts right, hairline below. -- */
 .top {
@@ -103,6 +109,103 @@ a { color: var(--accent); }
   color: var(--muted);
 }
 .top-meta span { white-space: nowrap; }
+
+/* -- KPI Strip ------------------------------------------------------ */
+.kpi-strip {
+  margin-top: var(--step-5);
+  padding: var(--step-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+.kpi-strip h2 {
+  margin-bottom: var(--step-3);
+  font-size: 16px;
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--step-2) var(--step-4);
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--step-2);
+  background: var(--canvas);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+}
+.kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+.kpi-value {
+  font-family: var(--font-num);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* -- Method & Validation Panel -------------------------------------- */
+.method {
+  margin-top: var(--step-5);
+}
+.method .formula {
+  font-family: var(--font-num);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  padding: var(--step-3) var(--step-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+  color: var(--muted);
+  margin: var(--step-3) 0;
+}
+.validation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--step-3);
+  margin: var(--step-4) 0;
+}
+.val-card {
+  padding: var(--step-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+.val-card h3 {
+  margin-bottom: var(--step-2);
+  font-size: 14px;
+  color: var(--gold);
+}
+.val-card p {
+  margin: var(--step-1) 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ablation-table, .odds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ablation-table th, .ablation-table td,
+.odds-table th, .odds-table td {
+  padding: var(--step-2) var(--step-3);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.ablation-table th, .odds-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.ablation-table td.num, .odds-table td.num {
+  font-family: var(--font-num);
+  text-align: right;
+}
 
 /* -- Intro: the claim on the left, the counts on the right. -- */
 .lede {
@@ -155,11 +258,11 @@ a { color: var(--accent); }
   gap: var(--step-3);
   padding: var(--step-4) 0;
   border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
-.field { display: grid; gap: var(--step-1); }
+.field { display: flex; flex-direction: column; gap: var(--step-1); min-width: 140px; }
 .field label { font-size: 12px; color: var(--muted); }
 .field input, .field select {
-  min-width: 170px;
   min-height: 36px;
   padding: 0 var(--step-3);
   border: 1px solid var(--border);
@@ -167,39 +270,82 @@ a { color: var(--accent); }
   background: var(--surface);
   color: var(--ink);
 }
-.field input { min-width: 260px; }
-.tabs {
-  display: flex;
-  gap: var(--step-1);
-  padding: 3px;
+.field input:focus, .field select:focus { border-color: var(--accent); }
+.tabs { display: flex; gap: var(--step-1); }
+.tabs button {
+  min-height: 36px;
+  padding: 0 var(--step-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   background: var(--surface);
+  color: var(--ink);
 }
-.tabs button {
-  min-height: 30px;
-  padding: 0 var(--step-3);
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
+.tabs button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
 }
-.tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.count { margin-left: auto; align-self: center; font-size: 13px; color: var(--muted); }
+.count { font-size: 13px; color: var(--faint); margin-left: auto; }
 
-/* -- Board table: one panel, rows you can open, numbers tabular. -- */
-.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
+/* -- Best Farms Strip ----------------------------------------------- */
+.best-farms {
+  margin-top: var(--step-5);
+  padding: var(--step-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+.best-farms h2 { margin-bottom: var(--step-1); }
+.best-farms .sub { margin-bottom: var(--step-3); }
+.farm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--step-3);
+}
+.farm-card {
+  display: grid;
+  gap: var(--step-1);
+  padding: var(--step-3);
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--canvas);
+}
+.farm-card:hover { border-color: var(--accent); }
+.farm-rank {
+  font-family: var(--font-num);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.farm-card b { font-size: 15px; }
+.farm-netph { font-family: var(--font-num); font-size: 16px; color: var(--accent); }
+.farm-net { font-size: 12px; color: var(--muted); }
+
+/* -- Sortable column head --------------------------------------------- */
+th button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font-weight: 500;
+}
+th button:hover { color: var(--accent); }
+th[aria-sort] button { color: var(--ink); }
+
+/* -- Board table ------------------------------------------------------ */
+.panel { margin-top: var(--step-4); }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { padding: var(--step-3) var(--step-3); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
-tbody tr:last-child td { border-bottom: 0; }
-th { font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--muted); }
-th button { display: inline-flex; align-items: center; gap: var(--step-1); padding: 0; border: 0; background: none; color: inherit; font: inherit; }
-th button:hover { color: var(--ink); }
-tbody tr { cursor: pointer; }
-tbody tr:hover { background: var(--surface-2); }
+caption { text-align: left; margin-bottom: var(--step-2); color: var(--muted); }
+th, td { padding: var(--step-2) var(--step-3); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+tbody tr:hover { background: rgba(52, 211, 153, 0.04); }
 tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
-.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
 .name { display: grid; gap: 2px; }
 .name b { font-weight: 600; }
 .sub { font-size: 12px; color: var(--muted); }
@@ -207,7 +353,15 @@ tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
 .neg { color: var(--negative); }
 .bar { width: 110px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--border); }
 .bar i { display: block; height: 100%; background: var(--accent); }
-.implied { display: flex; align-items: center; gap: var(--step-2); }
+.implied { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.implied .num { font-size: 15px; font-weight: 600; }
+.band-info { display: flex; flex-direction: column; gap: 1px; font-size: 10px; color: var(--faint); width: 100%; text-align: right; }
+.verdict-cell { font-weight: 600; font-size: 12px; text-transform: uppercase; }
+.verdict-robust { color: var(--verdict-robust); }
+.verdict-farm { color: var(--verdict-farm); }
+.verdict-thin { color: var(--verdict-thin); }
+.verdict-marginal { color: var(--verdict-marginal); }
+.verdict-skip { color: var(--verdict-skip); }
 .badge {
   display: inline-flex;
   align-items: center;
@@ -224,19 +378,8 @@ tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
 .rank-no { font-family: var(--font-num); font-weight: 600; }
 .rank-no.top3 { color: var(--gold); }
 
-/* -- Model panel: the formula, the category multiples, the screen. -- */
+/* -- Model panel ------------------------------------------------------ */
 .model { display: grid; gap: var(--step-3); margin-top: var(--step-4); padding: var(--step-5); }
-.formula {
-  font-family: var(--font-num);
-  font-size: 13px;
-  line-height: 1.7;
-  overflow-wrap: anywhere;
-  padding: var(--step-3) var(--step-4);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--canvas);
-  color: var(--muted);
-}
 .comps { display: flex; flex-wrap: wrap; gap: var(--step-2); }
 .comp {
   font-family: var(--font-num);
@@ -248,7 +391,7 @@ tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
 }
 .comp b { font-weight: 500; color: var(--ink); }
 
-/* -- Empty state and plain buttons, used when no row matches. -- */
+/* -- Empty state and plain buttons ------------------------------------ */
 .empty { display: grid; gap: var(--step-3); justify-items: center; padding: var(--step-7) var(--step-5); text-align: center; }
 .empty p { color: var(--muted); }
 .button {
@@ -261,14 +404,14 @@ tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
 }
 .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
-/* -- Detail drawer: a fixed panel docked to the right, modal via <dialog>. -- */
+/* -- Detail drawer ---------------------------------------------------- */
 .detail {
   position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: auto;
-  width: min(540px, 94vw);
+  width: min(640px, 94vw);
   max-height: 100%;
   z-index: 10;
   margin: 0;
@@ -279,30 +422,56 @@ tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
   color: var(--ink);
 }
 .detail::backdrop { background: rgba(4, 8, 6, 0.6); }
-.detail-head { display: flex; align-items: start; justify-content: space-between; gap: var(--step-4); }
-.close {
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0 var(--step-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--ink);
-}
+.detail-head { display: flex; align-items: start; justify-content: space-between; gap: var(--step-4); margin-bottom: var(--step-4); }
 .detail h2 { margin-top: var(--step-1); }
 .detail .sub { margin-top: var(--step-1); }
 .detail-section { margin-top: var(--step-5); padding-top: var(--step-4); border-top: 1px solid var(--border); }
-.detail-section h3 { margin-bottom: var(--step-2); }
-.equation { display: grid; gap: var(--step-2); font-family: var(--font-num); font-size: 13px; }
-.equation div { display: flex; justify-content: space-between; gap: var(--step-3); }
-.equation span { color: var(--muted); }
-.equation .total { border-top: 1px solid var(--border); padding-top: var(--step-2); }
-.equation .total b { color: var(--accent); }
+.detail-section h3 { margin-bottom: var(--step-2); font-size: 14px; }
+
+/* Waterfall */
+.waterfall { display: grid; gap: var(--step-1); font-family: var(--font-num); font-size: 13px; margin: var(--step-3) 0; }
+.waterfall-row { display: flex; justify-content: space-between; gap: var(--step-3); padding: var(--step-1) 0; }
+.waterfall-row:not(:last-child) { border-bottom: 1px dashed var(--border); }
+.waterfall-row:last-child { border-top: 1px solid var(--border); padding-top: var(--step-2); }
+.waterfall-label { color: var(--muted); }
+.waterfall-value { font-weight: 600; color: var(--accent); }
+
+/* Comparables */
+.comparables h4 { margin-bottom: var(--step-2); font-size: 13px; }
+.comparables .table-wrap { max-height: 200px; overflow-y: auto; }
+
+/* Band & Rank */
+.band-rank h4 { margin-bottom: var(--step-2); font-size: 13px; }
+.band-rank-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--step-3); }
+.band-item { display: flex; flex-direction: column; gap: 2px; }
+.band-label { font-size: 11px; color: var(--faint); }
+.band-value { font-family: var(--font-num); font-size: 13px; }
+
+/* Economics Box */
+.econ-box h4 { margin-bottom: var(--step-2); font-size: 13px; }
+.econ-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.econ-table td { padding: 2px var(--step-2); border-bottom: 1px solid var(--border); vertical-align: top; }
+.econ-table td:first-child { color: var(--muted); width: 55%; }
+.econ-table td.num { font-family: var(--font-num); text-align: right; white-space: nowrap; }
+.econ-table td.neg { color: var(--negative); }
+.skip-note {
+  margin-top: var(--step-3);
+  padding: var(--step-3);
+  border: 1px solid var(--verdict-skip);
+  border-radius: var(--radius-control);
+  background: rgba(147, 166, 157, 0.1);
+  color: var(--verdict-skip);
+  font-size: 13px;
+}
+
+/* Farm steps */
 .steps { display: grid; gap: var(--step-3); margin: 0; padding-left: var(--step-5); }
 .steps li { padding-left: var(--step-1); }
 .steps li::marker { color: var(--accent); font-weight: 600; }
 .steps b { display: block; font-weight: 500; }
 .cost { font-family: var(--font-num); font-size: 12px; color: var(--muted); }
+
+/* Note */
 .note {
   margin-top: var(--step-5);
   padding: var(--step-4);
@@ -313,19 +482,21 @@ tbody tr[data-selected="true"] { background: rgba(52, 211, 153, 0.08); }
   color: var(--muted);
 }
 
-/* -- Footer: one quiet line under the board. -- */
+/* -- Footer ----------------------------------------------------------- */
 .foot { margin-top: var(--step-5); font-size: 12px; text-align: center; color: var(--faint); }
 
-/* -- Narrow screens: stack the intro and the spotlight, full-width search. -- */
+/* -- Narrow screens --------------------------------------------------- */
 @media (max-width: 900px) {
   .shell { padding: var(--step-4); }
   .lede { grid-template-columns: 1fr; gap: var(--step-4); }
   .facts { border-left: 0; border-top: 1px solid var(--border); padding-left: 0; padding-top: var(--step-4); }
   .spot { grid-template-columns: 1fr; }
   .field input { min-width: 0; width: 100%; }
+  .band-rank-grid { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* -- Reduced motion: nothing on this page should animate. -- */
+/* -- Reduced motion --------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
