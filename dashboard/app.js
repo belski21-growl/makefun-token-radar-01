@@ -1,10 +1,10 @@
-// Token Radar — the dashboard's rendering code.
+// Token Radar — the dashboard's rendering code, second draft.
 //
 // The page is fed by data.js, which main.ts writes beside this folder as
 // window.RADAR: the ranked board, the live-token set-aside, the fitted size
-// curve and the model constants. This script turns that one object into
-// the whole page — masthead, intro, top-three cards, filters, the sortable
-// board table, the live-token table, the model explainer and the per-protocol
+// curve and the model constants. This script turns that one object into the
+// whole page — masthead, intro, top-three cards, filters, the sortable board
+// table, the live-token table, the model explainer and the per-protocol
 // detail drawer — and nothing else. It fetches nothing: every number and word
 // on screen comes from the snapshot baked into data.js.
 //
@@ -12,24 +12,24 @@
 // not trust the board's implied values: it re-derives each row's implied value
 // from the snapshot figures (TVL, the fitted curve's value at that TVL, the
 // growth and maturity multipliers, the chain breadth) with the same factors
-// the model in lib/model.ts uses, and prints whether the re-derived
-// number equals the one board.json carries —
-// recomputeImplied(row, SNAP.model) === row.implied_value_usd —
+// the model in lib/model.ts uses, and prints whether the re-derived number
+// equals the one board.json carries —
+// recomputeImplied(row, DATA.model) === row.implied_value_usd —
 // so a stale or altered board shows up in the open instead of hiding.
 (function () {
   'use strict';
 
   // The snapshot payload. Bail out silently when the data script never ran:
   // there is nothing to render and no error worth surfacing.
-  var SNAP = window.RADAR;
-  if (!SNAP) return;
+  var DATA = window.RADAR;
+  if (!DATA) return;
 
-  var mount = document.getElementById('app');
+  var root = document.getElementById('app');
 
   // Everything the page remembers between renders: the search text, the two
   // dropdown filters, the TVL floor, which tab is showing, the sort key and
   // direction, and the slug of the protocol whose detail drawer is open.
-  var view = {
+  var state = {
     q: '',
     category: 'all',
     chain: 'all',
@@ -44,31 +44,45 @@
   //
   // Money is shown compactly ($404.0M, $150.3M, $12K) once it passes a
   // thousand dollars, and with the plain currency formatter below that.
-  var usdPlain = new Intl.NumberFormat('en-US', {
+  var usdFmt = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 0,
   });
 
   function money(n) {
-    if (n === null || n === undefined || !isFinite(n)) return 'n/a';
+    if (n === null || n === undefined || !isFinite(n)) {
+      return 'n/a';
+    }
     var size = Math.abs(n);
-    if (size >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
-    if (size >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
-    if (size >= 1e3) return '$' + Math.round(n / 1e3) + 'K';
-    return usdPlain.format(n);
+    if (size >= 1e9) {
+      return '$' + (n / 1e9).toFixed(2) + 'B';
+    }
+    if (size >= 1e6) {
+      return '$' + (n / 1e6).toFixed(1) + 'M';
+    }
+    if (size >= 1e3) {
+      return '$' + Math.round(n / 1e3) + 'K';
+    }
+    return usdFmt.format(n);
   }
 
   // A weekly change, signed and to two decimals: +12.34%, -3.20%, or n/a.
   function pct(n) {
-    if (n === null || n === undefined || !isFinite(n)) return 'n/a';
+    if (n === null || n === undefined || !isFinite(n)) {
+      return 'n/a';
+    }
     return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
   }
 
   // An age in days, as years past a year and days below it.
   function ageText(days) {
-    if (days === null || days === undefined) return 'unknown';
-    if (days >= 365) return (days / 365).toFixed(1) + 'y';
+    if (days === null || days === undefined) {
+      return 'unknown';
+    }
+    if (days >= 365) {
+      return (days / 365).toFixed(1) + 'y';
+    }
     return Math.max(0, Math.round(days)) + 'd';
   }
 
@@ -88,12 +102,12 @@
   // the check above only holds if this function lands on the board's exact
   // number.
   function recomputeImplied(row, model) {
-    var rawGrowth = row.change_7d == null ? 0 : row.change_7d;
-    var clampedGrowth = Math.max(model.growth_floor, Math.min(model.growth_cap, rawGrowth));
-    var growthFactor = 1 + (clampedGrowth / 100) * model.growth_weight;
+    var growthRaw = row.change_7d == null ? 0 : row.change_7d;
+    var growthClamped = Math.max(model.growth_floor, Math.min(model.growth_cap, growthRaw));
+    var growthFactor = 1 + (growthClamped / 100) * model.growth_weight;
     var ageDays = row.age_days == null ? model.unknown_age_days : row.age_days;
-    var cappedAge = Math.min(Math.max(ageDays, 0), model.maturity_days);
-    var maturityFactor = model.maturity_floor + (cappedAge / model.maturity_days) * model.maturity_range;
+    var ageCapped = Math.min(Math.max(ageDays, 0), model.maturity_days);
+    var maturityFactor = model.maturity_floor + (ageCapped / model.maturity_days) * model.maturity_range;
     var chainCount = (row.chains || []).length;
     var extraChains = Math.min(Math.max(chainCount - 1, 0), model.breadth_max_chains);
     var breadthFactor = 1 + extraChains * model.breadth_per_chain;
@@ -112,7 +126,9 @@
   function h(name, attrs, kids) {
     var node = document.createElement(name);
     if (attrs) {
-      for (var key of Object.keys(attrs)) {
+      var keys = Object.keys(attrs);
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
         var value = attrs[key];
         if (value === null || value === undefined) continue;
         if (key === 'className') node.className = value;
@@ -123,10 +139,14 @@
       }
     }
     if (kids) {
-      for (var child of kids) {
+      for (var j = 0; j < kids.length; j++) {
+        var child = kids[j];
         if (child === null || child === undefined) continue;
         if (Array.isArray(child)) {
-          for (var inner of child) if (inner) node.appendChild(inner);
+          for (var k = 0; k < child.length; k++) {
+            var inner = child[k];
+            if (inner) node.appendChild(inner);
+          }
         } else if (typeof child === 'string') node.appendChild(document.createTextNode(child));
         else node.appendChild(child);
       }
@@ -146,24 +166,24 @@
     if (!raw) return;
     var params = new URLSearchParams(raw);
     var q = params.get('q');
-    if (q) view.q = q;
+    if (q) state.q = q;
     var category = params.get('category');
-    if (category) view.category = category;
+    if (category) state.category = category;
     var chain = params.get('chain');
-    if (chain) view.chain = chain;
+    if (chain) state.chain = chain;
     var tab = params.get('tab');
-    if (tab) view.tab = tab;
+    if (tab) state.tab = tab;
     var picked = params.get('p');
-    if (picked) view.selected = picked;
+    if (picked) state.selected = picked;
   }
 
   function saveToHash() {
     var params = new URLSearchParams();
-    if (view.q) params.set('q', view.q);
-    if (view.category !== 'all') params.set('category', view.category);
-    if (view.chain !== 'all') params.set('chain', view.chain);
-    if (view.tab !== 'pre-token') params.set('tab', view.tab);
-    if (view.selected) params.set('p', view.selected);
+    if (state.q) params.set('q', state.q);
+    if (state.category !== 'all') params.set('category', state.category);
+    if (state.chain !== 'all') params.set('chain', state.chain);
+    if (state.tab !== 'pre-token') params.set('tab', state.tab);
+    if (state.selected) params.set('p', state.selected);
     var next = params.toString();
     if (next) window.history.replaceState(null, '', '#' + next);
     else window.history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -178,11 +198,11 @@
   // every render. A missing growth counts as the lowest growth, a missing
   // age as the oldest age, so nulls sink instead of floating to the top.
   function visibleRows() {
-    var needle = view.q.trim().toLowerCase();
-    return SNAP.rows.filter(function (row) {
-      if (view.category !== 'all' && row.category !== view.category) return false;
-      if (view.chain !== 'all' && (row.chains || []).indexOf(view.chain) < 0) return false;
-      if (view.minTvl > 0 && row.tvl_usd < view.minTvl) return false;
+    var needle = state.q.trim().toLowerCase();
+    return DATA.rows.filter(function (row) {
+      if (state.category !== 'all' && row.category !== state.category) return false;
+      if (state.chain !== 'all' && (row.chains || []).indexOf(state.chain) < 0) return false;
+      if (state.minTvl > 0 && row.tvl_usd < state.minTvl) return false;
       if (!needle) return true;
       var haystack = [row.name, row.slug, row.category, (row.chains || []).join(' ')].join(' ').toLowerCase();
       return haystack.indexOf(needle) >= 0;
@@ -190,10 +210,10 @@
   }
 
   function sortValue(row) {
-    if (view.sort === 'name') return row.name.toLowerCase();
-    if (view.sort === 'tvl') return row.tvl_usd;
-    if (view.sort === 'growth') return row.change_7d === null ? -Infinity : row.change_7d;
-    if (view.sort === 'age') return row.age_days === null ? Infinity : row.age_days;
+    if (state.sort === 'name') return row.name.toLowerCase();
+    if (state.sort === 'tvl') return row.tvl_usd;
+    if (state.sort === 'growth') return row.change_7d === null ? -Infinity : row.change_7d;
+    if (state.sort === 'age') return row.age_days === null ? Infinity : row.age_days;
     return row.implied_value_usd;
   }
 
@@ -201,8 +221,8 @@
     return list.slice().sort(function (a, b) {
       var av = sortValue(a);
       var bv = sortValue(b);
-      if (av < bv) return -view.dir;
-      if (av > bv) return view.dir;
+      if (av < bv) return -state.dir;
+      if (av > bv) return state.dir;
       return a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0;
     });
   }
@@ -215,36 +235,38 @@
         h('span', { className: 'brand-name', text: 'Token Radar' }, []),
       ]),
       h('div', { className: 'top-meta' }, [
-        h('span', { text: 'Snapshot ' + SNAP.as_of }, []),
+        h('span', { text: 'Snapshot ' + DATA.as_of }, []),
         h('span', { text: 'DefiLlama protocol index' }, []),
-        h('span', { text: SNAP.model_version + ' model' }, []),
+        h('span', { text: DATA.model_version + ' model' }, []),
       ]),
     ]);
   }
 
   // -- Intro: the claim, and the counts that back it ----------------------
   function buildIntro() {
-    var top = SNAP.rows[0];
-    var floorM = Math.round(SNAP.floor_usd / 1e6);
+    var top = DATA.rows[0];
+    var floorM = Math.round(DATA.floor_usd / 1e6);
     var blurb = 'The watchlist is the floor: every protocol with at least $' + floorM +
-      'M of TVL and no token on record. The early radar adds ' + SNAP.early_size +
+      'M of TVL and no token on record. The early radar adds ' + DATA.early_size +
       ' more pre-token protocols below that floor, screened the same way — no wrapped, staked or bridged product of a token that already trades. Implied value is this entry\u2019s model, not a promise and not a prediction of a launch.';
     var facts = [
-      ['Watchlist covered', SNAP.watchlist_size + ' / ' + SNAP.watchlist_size],
-      ['Pre-token rows scored', String(SNAP.board_size)],
-      ['Early rows below the floor', String(SNAP.early_size)],
-      ['Live-token protocols set aside', String(SNAP.live_size)],
+      ['Watchlist covered', DATA.watchlist_size + ' / ' + DATA.watchlist_size],
+      ['Pre-token rows scored', String(DATA.board_size)],
+      ['Early rows below the floor', String(DATA.early_size)],
+      ['Live-token protocols set aside', String(DATA.live_size)],
       ['Top implied value', top ? money(top.implied_value_usd) + ' — ' + top.name : 'n/a'],
     ];
-    var factNodes = facts.map(function (pair) {
-      return h('div', { className: 'fact' }, [
+    var factNodes = [];
+    for (var i = 0; i < facts.length; i++) {
+      var pair = facts[i];
+      factNodes.push(h('div', { className: 'fact' }, [
         h('span', { text: pair[0] }, []),
         h('b', { text: pair[1] }, []),
-      ]);
-    });
+      ]));
+    }
     return h('section', { className: 'lede' }, [
       h('div', {}, [
-        h('h1', { text: SNAP.watchlist_size + ' watchlist protocols, ranked by implied launch value' }, []),
+        h('h1', { text: DATA.watchlist_size + ' watchlist protocols, ranked by implied launch value' }, []),
         h('p', { text: blurb }, []),
       ]),
       h('div', { className: 'facts' }, factNodes),
@@ -254,8 +276,9 @@
   // -- Spotlight: the top three, as three clickable cards -----------------
   function buildSpotlight() {
     var cards = [];
-    var leaders = SNAP.rows.slice(0, 3);
-    for (const row of leaders) {
+    var leaders = DATA.rows.slice(0, 3);
+    for (var i = 0; i < leaders.length; i++) {
+      var row = leaders[i];
       cards.push(h('button', {
         className: 'spot-card',
         type: 'button',
@@ -280,84 +303,89 @@
   function buildFilters() {
     var categorySet = new Set();
     var chainSet = new Set();
-    for (const row of SNAP.rows) {
+    for (var i = 0; i < DATA.rows.length; i++) {
+      var row = DATA.rows[i];
       categorySet.add(row.category || 'Other');
-      for (const chain of row.chains || []) chainSet.add(chain);
+      var rowChains = row.chains || [];
+      for (var j = 0; j < rowChains.length; j++) chainSet.add(rowChains[j]);
     }
     var categories = Array.from(categorySet).sort();
     var chains = Array.from(chainSet).sort();
 
-    var search = h('input', {
+    var searchInput = h('input', {
       type: 'search',
       id: 'q',
       placeholder: 'Search name, category or chain',
-      value: view.q,
+      value: state.q,
       'aria-label': 'Search the board',
     }, []);
-    search.addEventListener('input', function () {
-      view.q = search.value;
+    searchInput.addEventListener('input', function () {
+      state.q = searchInput.value;
       saveToHash();
       paint();
     });
 
     var categoryOptions = [h('option', { value: 'all', text: 'All categories' }, [])];
-    for (const c of categories) {
-      categoryOptions.push(h('option', { value: c, text: c, selected: c === view.category ? 'selected' : null }, []));
+    for (var i = 0; i < categories.length; i++) {
+      var c = categories[i];
+      categoryOptions.push(h('option', { value: c, text: c, selected: c === state.category ? 'selected' : null }, []));
     }
-    var categorySelect = h('select', { id: 'category', 'aria-label': 'Filter by category' }, categoryOptions);
-    categorySelect.addEventListener('change', function () {
-      view.category = categorySelect.value;
+    var catSelect = h('select', { id: 'category', 'aria-label': 'Filter by category' }, categoryOptions);
+    catSelect.addEventListener('change', function () {
+      state.category = catSelect.value;
       saveToHash();
       paint();
     });
 
     var chainOptions = [h('option', { value: 'all', text: 'All chains' }, [])];
-    for (const c of chains) {
-      chainOptions.push(h('option', { value: c, text: c, selected: c === view.chain ? 'selected' : null }, []));
+    for (var i = 0; i < chains.length; i++) {
+      var c = chains[i];
+      chainOptions.push(h('option', { value: c, text: c, selected: c === state.chain ? 'selected' : null }, []));
     }
     var chainSelect = h('select', { id: 'chain', 'aria-label': 'Filter by chain' }, chainOptions);
     chainSelect.addEventListener('change', function () {
-      view.chain = chainSelect.value;
+      state.chain = chainSelect.value;
       saveToHash();
       paint();
     });
 
     var tvlSteps = [['$50M+', 50000000], ['$100M+', 100000000], ['$250M+', 250000000], ['$500M+', 500000000]];
     var tvlOptions = [h('option', { value: '0', text: 'Any TVL' }, [])];
-    for (const step of tvlSteps) {
-      tvlOptions.push(h('option', { value: String(step[1]), text: step[0], selected: view.minTvl === step[1] ? 'selected' : null }, []));
+    for (var i = 0; i < tvlSteps.length; i++) {
+      var step = tvlSteps[i];
+      tvlOptions.push(h('option', { value: String(step[1]), text: step[0], selected: state.minTvl === step[1] ? 'selected' : null }, []));
     }
     var tvlSelect = h('select', { id: 'mintvl', 'aria-label': 'Minimum TVL' }, tvlOptions);
     tvlSelect.addEventListener('change', function () {
-      view.minTvl = Number(tvlSelect.value);
+      state.minTvl = Number(tvlSelect.value);
       paint();
     });
 
     var preTab = h('button', {
       type: 'button',
-      'aria-pressed': view.tab === 'pre-token' ? 'true' : 'false',
+      'aria-pressed': state.tab === 'pre-token' ? 'true' : 'false',
       text: 'Pre-token',
-      onclick: function () { view.tab = 'pre-token'; paint(); },
+      onclick: function () { state.tab = 'pre-token'; paint(); },
     }, []);
     var liveTab = h('button', {
       type: 'button',
-      'aria-pressed': view.tab === 'live' ? 'true' : 'false',
+      'aria-pressed': state.tab === 'live' ? 'true' : 'false',
       text: 'Live token',
-      onclick: function () { view.tab = 'live'; paint(); },
+      onclick: function () { state.tab = 'live'; paint(); },
     }, []);
 
-    var shown = view.tab === 'pre-token'
+    var shown = state.tab === 'pre-token'
       ? visibleRows().length + ' rows shown'
-      : SNAP.live.length + ' live-token protocols';
+      : DATA.live.length + ' live-token protocols';
 
     return h('div', { className: 'controls' }, [
       h('div', { className: 'field' }, [
         h('label', { for: 'q', text: 'Search' }, []),
-        search,
+        searchInput,
       ]),
       h('div', { className: 'field' }, [
         h('label', { for: 'category', text: 'Category' }, []),
-        categorySelect,
+        catSelect,
       ]),
       h('div', { className: 'field' }, [
         h('label', { for: 'chain', text: 'Chain' }, []),
@@ -383,13 +411,13 @@
     var button = h('button', {
       type: 'button',
       onclick: function () {
-        if (view.sort === key) view.dir = -view.dir;
-        else { view.sort = key; view.dir = -1; }
+        if (state.sort === key) state.dir = -state.dir;
+        else { state.sort = key; state.dir = -1; }
         paint();
       },
     }, [label]);
-    if (view.sort === key) {
-      button.appendChild(h('span', { 'aria-hidden': 'true', text: view.dir < 0 ? ' \u25bc' : ' \u25b2' }, []));
+    if (state.sort === key) {
+      button.appendChild(h('span', { 'aria-hidden': 'true', text: state.dir < 0 ? ' \u25bc' : ' \u25b2' }, []));
     }
     return h('th', { scope: 'col' }, [button]);
   }
@@ -401,12 +429,12 @@
   }
 
   // -- One board row --------------------------------------------------------
-  function boardRowNode(row, topValue) {
-    var growthText = row.change_7d === null ? 'n/a' : pct(row.change_7d);
-    var growthClass = row.change_7d === null ? '' : row.change_7d >= 0 ? 'pos' : 'neg';
-    var barWidth = Math.max(3, Math.round((row.implied_value_usd / topValue) * 100));
+  function boardRowNode(row, topImplied) {
+    var growthLabel = row.change_7d === null ? 'n/a' : pct(row.change_7d);
+    var growthCls = row.change_7d === null ? '' : row.change_7d >= 0 ? 'pos' : 'neg';
+    var barPct = Math.max(3, Math.round((row.implied_value_usd / topImplied) * 100));
     return h('tr', {
-      'data-selected': view.selected === row.slug ? 'true' : 'false',
+      'data-selected': state.selected === row.slug ? 'true' : 'false',
       tabindex: '0',
       onclick: function () { showProtocol(row.slug); },
       onkeydown: function (e) {
@@ -421,12 +449,12 @@
         ]),
       ]),
       h('td', { className: 'num', text: money(row.tvl_usd) }, []),
-      h('td', { className: 'num ' + growthClass, text: growthText }, []),
+      h('td', { className: 'num ' + growthCls, text: growthLabel }, []),
       h('td', { className: 'num', text: ageText(row.age_days) }, []),
       h('td', {}, [
         h('div', { className: 'implied' }, [
           h('div', { className: 'bar', 'aria-hidden': 'true' }, [
-            h('i', { style: 'width:' + barWidth + '%' }, []),
+            h('i', { style: 'width:' + barPct + '%' }, []),
           ]),
           h('span', { className: 'num', text: money(row.implied_value_usd) }, []),
         ]),
@@ -437,8 +465,8 @@
 
   // -- The board table, or the empty state when nothing matches ------------
   function buildBoard() {
-    var list = orderedRows(visibleRows());
-    if (list.length === 0) {
+    var shown = orderedRows(visibleRows());
+    if (shown.length === 0) {
       return h('div', { className: 'panel' }, [
         h('div', { className: 'empty' }, [
           h('h2', { text: 'No protocol matches that filter' }, []),
@@ -448,10 +476,10 @@
             type: 'button',
             text: 'Clear filters',
             onclick: function () {
-              view.q = '';
-              view.category = 'all';
-              view.chain = 'all';
-              view.minTvl = 0;
+              state.q = '';
+              state.category = 'all';
+              state.chain = 'all';
+              state.minTvl = 0;
               saveToHash();
               paint();
             },
@@ -459,9 +487,9 @@
         ]),
       ]);
     }
-    var topValue = SNAP.rows[0].implied_value_usd || 1;
-    var tbody = h('tbody', {}, []);
-    for (const row of list) tbody.appendChild(boardRowNode(row, topValue));
+    var topImplied = DATA.rows[0].implied_value_usd || 1;
+    var body = h('tbody', {}, []);
+    for (var i = 0; i < shown.length; i++) body.appendChild(boardRowNode(shown[i], topImplied));
     return h('div', { className: 'panel', id: 'board' }, [
       h('div', { className: 'table-wrap' }, [
         h('table', {}, [
@@ -477,7 +505,7 @@
               h('th', { scope: 'col', text: 'Token' }, []),
             ]),
           ]),
-          tbody,
+          body,
         ]),
       ]),
     ]);
@@ -485,10 +513,11 @@
 
   // -- The live-token table: market caps, not a model ----------------------
   function buildLiveBoard() {
-    var tbody = h('tbody', {}, []);
-    for (const row of SNAP.live) {
-      var growthClass = row.change_7d !== null && row.change_7d >= 0 ? 'pos' : 'neg';
-      tbody.appendChild(h('tr', {}, [
+    var body = h('tbody', {}, []);
+    for (var i = 0; i < DATA.live.length; i++) {
+      var row = DATA.live[i];
+      var growthCls = row.change_7d !== null && row.change_7d >= 0 ? 'pos' : 'neg';
+      body.appendChild(h('tr', {}, [
         h('td', { className: 'num', text: 'live' }, []),
         h('td', {}, [
           h('div', { className: 'name' }, [
@@ -497,7 +526,7 @@
           ]),
         ]),
         h('td', { className: 'num', text: money(row.tvl_usd) }, []),
-        h('td', { className: 'num ' + growthClass, text: pct(row.change_7d) }, []),
+        h('td', { className: 'num ' + growthCls, text: pct(row.change_7d) }, []),
         h('td', { className: 'num', text: money(row.mcap_usd) }, []),
         h('td', {}, [h('span', { className: 'badge live', text: 'already trades' }, [])]),
       ]));
@@ -516,7 +545,7 @@
               h('th', { scope: 'col', text: 'Token' }, []),
             ]),
           ]),
-          tbody,
+          body,
         ]),
       ]),
     ]);
@@ -529,35 +558,35 @@
   // not a multiple set by hand. The three small terms (growth, maturity,
   // breadth) are the same hand-set constants as before, stated in the open.
   function buildModelNote() {
-    var m = SNAP.model;
-    var fit = SNAP.fit;
-    var fitLine = 'log10(mcap) = ' + fit.intercept.toFixed(4) + ' + ' + fit.slope.toFixed(4) + ' x log10(TVL)';
-    var chips = [
+    var model = DATA.model;
+    var fit = DATA.fit;
+    var curveLine = 'log10(mcap) = ' + fit.intercept.toFixed(4) + ' + ' + fit.slope.toFixed(4) + ' x log10(TVL)';
+    var chipNodes = [
       h('span', { className: 'comp' }, ['Traded comparables ', h('b', { text: String(fit.n_comps) }, [])]),
       h('span', { className: 'comp' }, ['R² ', h('b', { text: fit.r_squared.toFixed(4) }, [])]),
       h('span', { className: 'comp' }, ['Slope ', h('b', { text: 'x' + fit.slope.toFixed(4) }, [])]),
       h('span', { className: 'comp' }, ['Zero-mcap excluded ', h('b', { text: String(fit.zero_mcap_excluded) }, [])]),
     ];
-    var formula = 'implied = round( 10 ^ (' + fit.intercept.toFixed(4) + ' + ' + fit.slope.toFixed(4) +
+    var formulaText = 'implied = round( 10 ^ (' + fit.intercept.toFixed(4) + ' + ' + fit.slope.toFixed(4) +
       ' x log10(tvl_usd)) x (1 + clamp(change_7d, ' +
-      m.growth_floor + ', ' + m.growth_cap + ') / 100 x ' + m.growth_weight + ') x (' +
-      m.maturity_floor + ' + min(age_days, ' + m.maturity_days + ') / ' + m.maturity_days +
-      ' x ' + m.maturity_range + ') x (1 + 0.02 x min(chains - 1, 5)) )';
-    var explainer = 'The size curve is fitted at run time by ordinary least squares on the ' +
+      model.growth_floor + ', ' + model.growth_cap + ') / 100 x ' + model.growth_weight + ') x (' +
+      model.maturity_floor + ' + min(age_days, ' + model.maturity_days + ') / ' + model.maturity_days +
+      ' x ' + model.maturity_range + ') x (1 + 0.02 x min(chains - 1, 5)) )';
+    var explainText = 'The size curve is fitted at run time by ordinary least squares on the ' +
       fit.n_comps + ' protocols in this snapshot that already trade (market cap above zero and TVL above zero). ' +
       'Its slope is below one, so value grows slower than size: ten times the TVL is worth only a few times the value, ' +
       'not ten times. ' + fit.zero_mcap_excluded + ' protocols that record a market cap of exactly zero are excluded ' +
       'from the fit, because log10(0) has no value and a zero cap is a record with no price in it. ' +
       'R² is ' + fit.r_squared.toFixed(4) + ' on the log scale — the curve explains part of the spread in traded values, ' +
       'not all of it, and the board says so. Age is the time since the protocol was first listed, the best record of ' +
-      'how long it has run with no token; an unlisted age uses ' + m.unknown_age_days + ' days.';
+      'how long it has run with no token; an unlisted age uses ' + model.unknown_age_days + ' days.';
     return h('section', { className: 'panel model' }, [
       h('h2', { text: 'How implied value is computed' }, []),
       h('p', { className: 'sub', text: 'Every row is scored by one function of the snapshot figures. No protocol name is special-cased, and no coefficient is hard-coded — the curve is fitted from the snapshot itself.' }, []),
-      h('div', { className: 'formula', text: fitLine }, []),
-      h('div', { className: 'comps' }, chips),
-      h('div', { className: 'formula', text: formula }, []),
-      h('p', { className: 'sub', text: explainer }, []),
+      h('div', { className: 'formula', text: curveLine }, []),
+      h('div', { className: 'comps' }, chipNodes),
+      h('div', { className: 'formula', text: formulaText }, []),
+      h('p', { className: 'sub', text: explainText }, []),
       h('p', { className: 'sub', text: 'The early radar is every pre-token protocol that passes the same screen as the watchlist — no token on record, not a wrapped, staked or bridged product, not a versioned pool — whatever its TVL. The live-token protocols are set aside with their market caps shown.' }, []),
     ]);
   }
@@ -571,30 +600,31 @@
   // the hash still names a protocol.
   var drawer = h('dialog', { className: 'detail', id: 'detail', 'aria-labelledby': 'detail-title' }, []);
   drawer.addEventListener('close', function () {
-    view.selected = null;
+    state.selected = null;
     saveToHash();
   });
 
   function showProtocol(slug) {
-    var row = null;
-    for (const candidate of SNAP.rows) {
-      if (candidate.slug === slug) { row = candidate; break; }
+    var entry = null;
+    for (var i = 0; i < DATA.rows.length; i++) {
+      var cand = DATA.rows[i];
+      if (cand.slug === slug) { entry = cand; break; }
     }
-    if (!row) return;
-    view.selected = slug;
+    if (!entry) return;
+    state.selected = slug;
     saveToHash();
     drawer.textContent = '';
-    var recomputed = recomputeImplied(row, SNAP.model);
-    var matches = recomputed === row.implied_value_usd;
-    var chainCount = (row.chains || []).length;
-    var chainText = row.chains && row.chains.length ? row.chains.join(', ') : 'an unnamed chain';
-    var fit = SNAP.fit;
+    var recomputed = recomputeImplied(entry, DATA.model);
+    var matches = recomputed === entry.implied_value_usd;
+    var chainCount = (entry.chains || []).length;
+    var chainText = entry.chains && entry.chains.length ? entry.chains.join(', ') : 'an unnamed chain';
+    var fit = DATA.fit;
 
     var head = h('div', { className: 'detail-head' }, [
       h('div', {}, [
-        h('span', { className: 'brand-name', text: 'Rank ' + row.rank + ' of ' + SNAP.board_size + ' · ' + (row.category || 'Other') }, []),
-        h('h2', { id: 'detail-title', text: row.name }, []),
-        h('p', { className: 'sub', text: 'on ' + chainText + (row.listed_at ? ' · listed ' + row.listed_at : '') }, []),
+        h('span', { className: 'brand-name', text: 'Rank ' + entry.rank + ' of ' + DATA.board_size + ' · ' + (entry.category || 'Other') }, []),
+        h('h2', { id: 'detail-title', text: entry.name }, []),
+        h('p', { className: 'sub', text: 'on ' + chainText + (entry.listed_at ? ' · listed ' + entry.listed_at : '') }, []),
       ]),
       h('button', {
         className: 'close',
@@ -608,16 +638,17 @@
     // The equation, as label/value pairs: the snapshot figures, the curve
     // value at this TVL, each multiplier, and the total the board carries.
     var breakdown = [
-      ['TVL', money(row.tvl_usd)],
-      ['Size curve value (10 ^ (' + fit.intercept.toFixed(4) + ' + ' + fit.slope.toFixed(4) + ' x log10(TVL)))', money(row.curve_value_usd)],
-      ['Seven-day growth', pct(row.change_7d)],
-      ['Growth multiplier', 'x' + multText(row.growth_multiplier)],
-      ['Age with no token', ageText(row.age_days)],
-      ['Maturity multiplier', 'x' + multText(row.maturity_multiplier)],
-      ['Chain breadth (' + chainCount + ' chain' + (chainCount === 1 ? '' : 's') + ')', 'x' + multText(row.breadth_multiplier)],
+      ['TVL', money(entry.tvl_usd)],
+      ['Size curve value (10 ^ (' + fit.intercept.toFixed(4) + ' + ' + fit.slope.toFixed(4) + ' x log10(TVL)))', money(entry.curve_value_usd)],
+      ['Seven-day growth', pct(entry.change_7d)],
+      ['Growth multiplier', 'x' + multText(entry.growth_multiplier)],
+      ['Age with no token', ageText(entry.age_days)],
+      ['Maturity multiplier', 'x' + multText(entry.maturity_multiplier)],
+      ['Chain breadth (' + chainCount + ' chain' + (chainCount === 1 ? '' : 's') + ')', 'x' + multText(entry.breadth_multiplier)],
     ];
     var equation = h('div', { className: 'equation' }, []);
-    for (const pair of breakdown) {
+    for (var i = 0; i < breakdown.length; i++) {
+      var pair = breakdown[i];
       equation.appendChild(h('div', {}, [
         h('span', { text: pair[0] }, []),
         h('b', { className: 'num', text: pair[1] }, []),
@@ -625,25 +656,27 @@
     }
     equation.appendChild(h('div', { className: 'total' }, [
       h('span', { text: 'Implied value' }, []),
-      h('b', { className: 'num', text: money(row.implied_value_usd) }, []),
+      h('b', { className: 'num', text: money(entry.implied_value_usd) }, []),
     ]));
 
-    var verdict = matches ? ', the same number board.json carries.' : ', which differs from the board — the data would be stale.';
-    var modelNote = 'Model ' + SNAP.model_version + ': the size curve is fitted on ' + fit.n_comps +
+    var matchNote = matches ? ', the same number board.json carries.' : ', which differs from the board — the data would be stale.';
+    var modelText = 'Model ' + DATA.model_version + ': the size curve is fitted on ' + fit.n_comps +
       ' traded protocols in this snapshot (R² ' + fit.r_squared.toFixed(4) + '), and the same function scores every protocol. ' +
-      'The page recomputes this row as ' + money(recomputed) + verdict +
+      'The page recomputes this row as ' + money(recomputed) + matchNote +
       ' This is an estimate of what a launch could be worth at today\u2019s record, not a price and not a prediction that a token comes.';
 
     var valueSection = h('section', { className: 'detail-section' }, [
       h('h3', { text: 'Implied value' }, []),
       equation,
-      h('p', { className: 'sub', text: modelNote }, []),
+      h('p', { className: 'sub', text: modelText }, []),
     ]);
 
     // Each farm step is one string with its cost tucked after " Cost: " —
     // the action goes bold, the cost and time stay small underneath it.
     var stepNodes = [];
-    for (const step of row.farm_steps || []) {
+    var farmSteps = entry.farm_steps || [];
+    for (var i = 0; i < farmSteps.length; i++) {
+      var step = farmSteps[i];
       var cut = step.indexOf(' Cost: ');
       var action = cut >= 0 ? step.slice(0, cut) : step;
       var tail = cut >= 0 ? step.slice(cut + 1) : '';
@@ -676,19 +709,19 @@
   // table on its own. The drawer lives outside the shell and is only
   // attached once; a selection in the hash re-opens it after the rebuild.
   function paint() {
-    mount.textContent = '';
-    var shell = h('div', { className: 'shell' }, []);
-    shell.appendChild(buildMasthead());
-    shell.appendChild(buildIntro());
-    shell.appendChild(buildSpotlight());
-    shell.appendChild(buildFilters());
-    shell.appendChild(view.tab === 'pre-token' ? buildBoard() : buildLiveBoard());
-    if (view.tab === 'pre-token') shell.appendChild(buildModelNote());
-    shell.appendChild(h('p', { className: 'foot', text: 'Token Radar · model ' + SNAP.model_version + ' · snapshot ' + SNAP.as_of + ' · ' + SNAP.source + ' · Implied values are this entry\u2019s model, never a price.' }, []));
-    mount.appendChild(shell);
-    mount.setAttribute('aria-busy', 'false');
-    if (!drawer.isConnected) mount.appendChild(drawer);
-    if (view.selected) showProtocol(view.selected);
+    root.textContent = '';
+    var page = h('div', { className: 'shell' }, []);
+    page.appendChild(buildMasthead());
+    page.appendChild(buildIntro());
+    page.appendChild(buildSpotlight());
+    page.appendChild(buildFilters());
+    page.appendChild(state.tab === 'pre-token' ? buildBoard() : buildLiveBoard());
+    if (state.tab === 'pre-token') page.appendChild(buildModelNote());
+    page.appendChild(h('p', { className: 'foot', text: 'Token Radar · model ' + DATA.model_version + ' · snapshot ' + DATA.as_of + ' · ' + DATA.source + ' · Implied values are this entry\u2019s model, never a price.' }, []));
+    root.appendChild(page);
+    root.setAttribute('aria-busy', 'false');
+    if (!drawer.isConnected) root.appendChild(drawer);
+    if (state.selected) showProtocol(state.selected);
   }
 
   loadFromHash();
