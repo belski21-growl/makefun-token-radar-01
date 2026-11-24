@@ -3,16 +3,16 @@
 [![rank](https://make.fun/badge/token-radar-01/belski21-growl/makefun-token-radar-01/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![reward](https://make.fun/badge/token-radar-01/belski21-growl/makefun-token-radar-01/reward.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 
-A ranked board of pre-token protocols by **implied launch value** — what a token
-launch could be worth, priced from the snapshot's own figures instead of from
-hype. Built for the make.fun competition **token-radar-01** ($1,325 prize,
-deadline 14 December 2026 10:00 WIB).
+A ranked board of pre-token protocols by **implied launch value** — an
+estimate of what a token launch could be worth, priced from the snapshot's
+own figures rather than from hype. Built for the make.fun competition
+**token-radar-01** ($1,325 prize, deadline 14 December 2026 10:00 WIB).
 
-The board covers **198 rows**: the house's 40-protocol watchlist (every protocol
-with at least $50M of TVL and no token on record) plus 158 more pre-token
-protocols below that floor, screened the same way. The 24 protocols that already
-have a live token are never ranked — they are shown apart, at their market caps,
-and they are the comparables the model prices the board from.
+The board holds **198 rows**: the house's 40-protocol watchlist (every
+protocol with at least $50M of TVL and no token on record) plus 158 further
+pre-token protocols below that floor, screened the same way. The 24
+protocols that already trade are never ranked — they sit apart, at their
+market caps, and they are the comparables the model prices the board from.
 
 ## The top of the board
 
@@ -27,7 +27,7 @@ and they are the comparables the model prices the board from.
 ## How a row is priced (model radar-3)
 
 A protocol is rankable when the snapshot records no token for it at all — no
-market cap, no CoinGecko id, no symbol — and it passes the watchlist screen:
+market cap, no CoinGecko id, no symbol — and it clears the watchlist screen:
 not a bridge, liquid-staking or restaking product, no whole word `wrapped`,
 `staked` or `staking` in the name, no version marker, no exchange-name prefix.
 
@@ -38,19 +38,20 @@ implied = max(1, round(tvl_usd × comp × growth × maturity × breadth))
 ```
 
 - **comp** — the category's comparable multiple: the median market-cap-per-TVL
-  of the category's live-token protocols (at least 3 comparables, otherwise the
+  of the category's live-token protocols (three comparables at least, else the
   global median), steadied toward the global median with three phantom
   comparables at the global rate, discounted 1% per rankable pre-token protocol
   past the third in the same category (a crowded launch field splits the value),
   then eased past the 0.80 cap on a curve that never passes 1.00 — so two rich
   categories keep their order instead of tying at the cap. Floor 0.08.
-- **growth** — `1 + clamp(change_7d, −60, 120) / 100 × 0.5`. Fast-growing TVL
-  is worth more at the same size.
+- **growth** — `1 + clamp(change_7d, −60, 120) / 100 × 0.5`: TVL that is
+  growing fast is worth more at the same size than TVL that is shrinking.
 - **maturity** — `0.6 + min(age_days, 1095) / 1095 × 0.4`, where age is the time
   since DefiLlama first listed the protocol; unknown age counts as 365 days.
   A protocol that has run a long time with no token carries more pent-up
   launch value.
-- **breadth** — `1 + 0.02 × min(chains − 1, 5)`. More chains, more farmers.
+- **breadth** — `1 + 0.02 × min(chains − 1, 5)`: more chains means more farmers
+  can reach the launch.
 
 No protocol name is ever special-cased: the same function scores every row, and
 the category multiples are computed from the snapshot at run time, so a future
@@ -64,7 +65,7 @@ capital ($50–$250 by TVL) and gas cost, a weekly qualifying action, a second-c
 step for multi-chain protocols, a hold period of 30–60 days by age, a claim-safety
 step and a farm-log step. Each step states its cost and time. The plan is a
 starting point, not advice: "no token" means the snapshot records none, which is
-DefiLlama's record, not proof — verify the protocol's own page before farming,
+DefiLlama's record, not proof — check the protocol's own page before farming,
 never pay to claim an airdrop, never share a seed phrase.
 
 ## The dashboard
@@ -75,7 +76,7 @@ theme. It shows the ranked board with search, category / chain / minimum-TVL
 filters and sorting, a spotlight of the top three, the live-token protocols set
 aside, the model panel with the formula and the category multiples, and a detail
 drawer per protocol with the model's own inputs and its farm plan. The page
-recomputes each row's implied value from the same four factors and checks it
+re-derives each row's implied value from the same four factors and checks it
 against `board.json` — 0 mismatches across all 198 rows.
 
 ## Running it
