@@ -3,16 +3,16 @@
 [![rank](https://make.fun/badge/token-radar-01/belski21-growl/makefun-token-radar-01/rank.svg)](https://make.fun/bounty/token-radar-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 [![reward](https://make.fun/badge/token-radar-01/belski21-growl/makefun-token-radar-01/reward.svg)](https://make.fun/bounty/token-radar-01?utm_source=github&utm_medium=readme&utm_campaign=token-radar-01)
 
-A ranked board of pre-token protocols by **implied launch value** — what a token
-launch could be worth, priced from the snapshot's own figures instead of from
-hype. Built for the make.fun competition **token-radar-01** ($1,325 prize,
-deadline 14 December 2026 10:00 WIB).
+A ranked board of pre-token protocols by **implied launch value** — an estimate
+of what a token launch could be worth, priced from the snapshot's own figures
+rather than from hype. This is an entry for the make.fun competition
+**token-radar-01** ($1,325 prize, deadline 14 December 2026 10:00 WIB).
 
-The board covers **198 rows**: the house's 40-protocol watchlist (every protocol
-with at least $50M of TVL and no token on record) plus 158 more pre-token
-protocols below that floor, screened the same way. The 24 protocols that already
-have a live token are never ranked — they are shown apart, at their market caps,
-and they are the comparables the model prices the board from.
+The board holds **198 rows**: the house's 40-protocol watchlist (every protocol
+with at least $50M of TVL and no token on record) plus 158 further pre-token
+protocols below that floor, screened in the same way. The 24 protocols that
+already have a live token are never ranked — they sit apart, at their market
+caps, and they are the comparables the model prices the board from.
 
 ## The top of the board
 
@@ -26,12 +26,12 @@ and they are the comparables the model prices the board from.
 
 ## How a row is priced (model radar-3)
 
-A protocol is rankable when the snapshot records no token for it at all — no
-market cap, no CoinGecko id, no symbol — and it passes the watchlist screen:
+A protocol can be ranked when the snapshot records no token for it at all — no
+market cap, no CoinGecko id, no symbol — and it clears the watchlist screen:
 not a bridge, liquid-staking or restaking product, no whole word `wrapped`,
 `staked` or `staking` in the name, no version marker, no exchange-name prefix.
 
-Implied value is one function of the snapshot's own numbers, in four factors:
+Implied value is a single function of the snapshot's own numbers, in four factors:
 
 ```
 implied = max(1, round(tvl_usd × comp × growth × maturity × breadth))
@@ -39,8 +39,8 @@ implied = max(1, round(tvl_usd × comp × growth × maturity × breadth))
 
 - **comp** — the category's comparable multiple: the median market-cap-per-TVL
   of the category's live-token protocols (at least 3 comparables, otherwise the
-  global median), steadied toward the global median with three phantom
-  comparables at the global rate, discounted 1% per rankable pre-token protocol
+  global median), pulled toward the global median with three phantom
+  comparables at the global rate, trimmed 1% per rankable pre-token protocol
   past the third in the same category (a crowded launch field splits the value),
   then eased past the 0.80 cap on a curve that never passes 1.00 — so two rich
   categories keep their order instead of tying at the cap. Floor 0.08.
@@ -58,11 +58,11 @@ snapshot re-prices the board on its own.
 
 ## Farm plans
 
-Every row carries a 6–7 step farm plan built from that protocol's own record —
+Each row carries a 6–7 step farm plan built from that protocol's own record —
 its category, chains, TVL and age: a category-specific main action with concrete
 capital ($50–$250 by TVL) and gas cost, a weekly qualifying action, a second-chain
 step for multi-chain protocols, a hold period of 30–60 days by age, a claim-safety
-step and a farm-log step. Each step states its cost and time. The plan is a
+step and a farm-log step. Every step states its cost and time. The plan is a
 starting point, not advice: "no token" means the snapshot records none, which is
 DefiLlama's record, not proof — verify the protocol's own page before farming,
 never pay to claim an airdrop, never share a seed phrase.
